@@ -146,6 +146,7 @@ class BaseScoreModel(pl.LightningModule):
     def score_fn(self, x, t):
         pass
 
+
     def single_loss_step(self, x_batch, timestep_idxs):
         pass
 
@@ -327,6 +328,7 @@ class TabScoreModel(BaseScoreModel):
             [l.shape[1] * F.softmax(l, dim=1) for l in self.splitter(cat_logits)],
             dim=1,
         )
+        #print(f"x_cat shape: {x_cat.shape}")  # Check size at dimension 1
         cat_score = tau * cat_score - tau
 
         score = torch.cat((cont_score, cat_score), dim=1)

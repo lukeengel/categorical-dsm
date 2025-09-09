@@ -32,12 +32,13 @@ def main(argv):
 
     if FLAGS.mode == "sweep":
 
-        def train_sweep():
+        def train_sweep(sweep_id):
 
             with wandb.init():
                 # Process config params to ml dict
                 config = FLAGS.config.to_dict()
                 sweep_config = wandb.config
+                
 
                 for p, val in sweep_config.items():
                     # First '_' splits into upper level
@@ -49,8 +50,9 @@ def main(argv):
 
                 wandb.config.update(config)
                 config = ml_collections.ConfigDict(wandb.config)
-                # print(config)
-                runner.train(config, workdir)
+                print(config)
+                print(f"SWEEPID in train_sweep:{sweep_id}")
+                runner.train(config, workdir, sweep_id=sweep_id)
             
             return
         
@@ -59,16 +61,20 @@ def main(argv):
         
         if FLAGS.sweep_id is not None:
             sweep_id = FLAGS.sweep_id
+            print(f"SWEEPID is not none:{sweep_id}")
         else:
             sweep_id = wandb.sweep(sweep_config, project="categorical")
+            print(f"SWEEPID is made:{sweep_id}")
 
         # Start sweep job
-        wandb.agent(sweep_id, train_sweep, project="categorical", count=20)
+        wandb.agent(sweep_id, lambda: train_sweep(sweep_id), project="categorical", count=20)
 
     elif FLAGS.mode == "eval":
+        print(f"Config contents from main: {config}")
         runner.eval(config, workdir)
     else:
         wandb.init(project="categorical", config=config.to_dict(), resume="allow")
+        print(config)
         runner.train(config, workdir)
 
 

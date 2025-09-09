@@ -155,24 +155,24 @@ def ood_metrics(
 
     fpr, tpr, thresholds = roc_curve(y_true, y_scores, drop_intermediate=False)
 
-    # rtol=1e-3 implies range of [0.949, 0.951]
-    find_fpr = np.isclose(tpr, 0.95, rtol=1e-3, atol=1e-4).any()
+    # rtol=1e-3 implies range of [0.949, 0.901]
+    find_fpr = np.isclose(tpr, 0.90, rtol=1e-3, atol=1e-4).any()
 
     if find_fpr:
-        tpr95_idx = np.where(np.isclose(tpr, 0.95, rtol=1e-3, atol=1e-4))[0][0]
-        tpr80_idx = tpr95_idx#np.where(np.isclose(tpr, 0.8, rtol=1e-2, atol=1e-3))[0][0]
+        tpr90_idx = np.where(np.isclose(tpr, 0.90, rtol=1e-3, atol=1e-4))[0][0]
+        tpr80_idx = tpr90_idx#np.where(np.isclose(tpr, 0.8, rtol=1e-2, atol=1e-3))[0][0]
     else:
         # This is becasuse numpy bugs out when the scores are fully separable
         # OR fully unseparable :D
-        tpr95_idx = np.where(np.isclose(tpr, 0.95, rtol=1e-1, atol=1e-1))[0][0]
-        tpr80_idx = tpr95_idx#np.where(np.isclose(tpr, 0.8, rtol=1e-1, atol=1e-1))[0][0]
-    #         tpr95_idx, tpr80_idx = 0,0 #tpr95_idx
+        tpr90_idx = np.where(np.isclose(tpr, 0.90, rtol=1e-1, atol=1e-1))[0][0]
+        tpr80_idx = tpr90_idx#np.where(np.isclose(tpr, 0.8, rtol=1e-1, atol=1e-1))[0][0]
+    #         tpr90_idx, tpr80_idx = 0,0 #tpr90_idx
 
     # Detection Error
     de = np.min(0.5 - tpr / 2 + fpr / 2)
 
     metrics = dict(
-        fpr_tpr95=fpr[tpr95_idx],
+        fpr_tpr90=fpr[tpr90_idx],
         de=de,
         roc_auc=roc_auc_score(y_true, y_scores),
         pr_auc_in=auc(rec_in, prec_in),
@@ -203,7 +203,7 @@ def ood_metrics(
             (
                 r"$\mathit{{ROC\ AUC}}={:.3f}$".format(metrics["roc_auc"]),
                 r"$\mathit{{AP}}={:.3f}$".format(metrics["ap"]),
-                r"$\mathit{{FPR @ TPR95}}={:.3f}$".format(metrics["fpr_tpr95"]),
+                r"$\mathit{{FPR @ TPR90}}={:.3f}$".format(metrics["fpr_tpr90"]),
                 r"$\mathit{{Detection\ Error}}={:.3f}$".format(metrics["de"]),
             )
         )
@@ -242,7 +242,7 @@ def ood_metrics(
                 metrics["pr_auc_in"] * 100, metrics["pr_auc_out"] * 100
             )
         )
-        print("FPR (95% TPR): {:.2f}%".format(metrics["fpr_tpr95"] * 100))
+        print("FPR (90% TPR): {:.2f}%".format(metrics["fpr_tpr90"] * 100))
         print("Detection Error: {:.2f}%".format(de * 100))
 
     return metrics

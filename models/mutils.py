@@ -4,8 +4,8 @@ import torch.nn.functional as F
 import numpy as np
 from models.tab_resnet import TabResNet
 from models.tab_mlp import TabMLP
-from models.resnext import ResNextpp
-from models.ncsnpp import NCSNpp
+#from models.resnext import ResNextpp
+#from models.ncsnpp import NCSNpp
 from models.ft_transformer_pp import FTTransformer
 
 optimizers = {
@@ -17,8 +17,8 @@ models = {
     "tab-transformer": FTTransformer,
     "tab-resnet": TabResNet,
     "tab-mlp": TabMLP,
-    "resnext": ResNextpp,
-    "ncsn++": NCSNpp,
+#    "resnext": ResNextpp,
+ #   "ncsn++": NCSNpp,
 }
 
 

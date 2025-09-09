@@ -11,7 +11,7 @@ from scipy.io import arff
 from sklearn.compose import ColumnTransformer
 from sklearn.compose import make_column_selector as selector
 from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
+from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler, MinMaxScaler
 from torch.utils.data import (
     DataLoader,
     ConcatDataset,
@@ -36,138 +36,30 @@ from tqdm.auto import tqdm
 import models.segmentation.module_transforms as SegT
 
 tabular_datasets = {
-    "bank": "bank-additional-ful-nominal.arff",
-    "chess": "chess_krkopt_zerovsall.arff",
-    "census": "census.pkl",
-    "probe": "kddcup99-corrected-probevsnormal-nominal-cleaned.arff",
-    "u2r": "kddcup99-corrected-u2rvsnormal-nominal-cleaned.arff",
-    "solar": "solar-flare_FvsAll-cleaned.arff",
-    "cmc": "cmc-nominal.arff",
-    "celeba": "list_attr_celeba_baldvsnonbald.arff",
-    "cars": "car_evaluation.csv",
-    "mushrooms": "mushrooms.csv",
-    "nursery": "nursery.csv",
-}
+    # "bank": "bank-additional-ful-nominal.arff",
+    # "chess": "chess_krkopt_zerovsall.arff",
+    # "census": "census.pkl",
+    # "probe": "kddcup99-corrected-probevsnormal-nominal-cleaned.arff",
+    # "u2r": "kddcup99-corrected-u2rvsnormal-nominal-cleaned.arff",
+    # "solar": "solar-flare_FvsAll-cleaned.arff",
+    # "cmc": "cmc-nominal.arff",
+    # "celeba": "list_attr_celeba_baldvsnonbald.arff",
+    # "cars": "car_evaluation.csv",
+    # "mushrooms": "mushrooms.csv",
+    # "nursery": "nursery.csv",
+    "abcd": "all_squeeky_id.csv",
 
+}
 
 def get_dataset(config, train_mode=True, return_with_loader=True, return_logits=True):
     generator = torch.Generator().manual_seed(config.seed)
     dataset_name = config.data.dataset.lower()
-    rootdir = "/tmp/datasets"
-
+    rootdir = "/proj/NIRAL/studies/ABCD/PsychosisAtypicality/data/"
+ 
     if dataset_name in tabular_datasets:
-        data = build_tabular_ds(dataset_name, return_logits=return_logits)
+        data, subject_ids = build_tabular_ds(dataset_name, return_logits=return_logits)
 
-    # If a torchvision dataset
-    elif dataset_name in ["voc"]:
-        img_sz = config.data.image_size
-
-        if config.data.cached:
-            # print()
-            if train_mode:
-                preprocessing = TrainTransform(
-                    out_size=img_sz,
-                    base_size=520,
-                    crop_size=480,
-                    to_logits=config.data.logits,
-                )
-
-            else:
-                preprocessing = SegmentationEval(
-                    out_size=img_sz, to_logits=config.data.logits
-                )
-            data = CachedVOCSegmentation(
-                root=rootdir,
-                download=False,
-                image_set="train",  # if train_mode else "val",
-                transforms=preprocessing,
-            )
-        else:
-            if train_mode:
-                preprocessing = SegmentationTrain(
-                    out_size=img_sz,
-                    base_size=520,
-                    crop_size=480,
-                    to_logits=config.data.logits,
-                )
-
-            else:
-                preprocessing = SegmentationEval(
-                    out_size=img_sz, to_logits=config.data.logits
-                )
-            data = VOCSegmentation(
-                root=rootdir,
-                download=False,
-                image_set=config.data.image_set,
-                transforms=preprocessing,
-            )
-
-    elif dataset_name in ["mnist", "omniglot", "fashion"]:
-        img_sz = config.data.image_size
-
-        data = MNIST(
-            rootdir,
-            download=True,
-            transform=Compose(
-                (
-                    ToTensor(),
-                    Resize((img_sz, img_sz), interpolation=InterpolationMode.BILINEAR),
-                )
-            ),
-        )
-        # FIXME: There's prolly a better way to do this
-        # Maybe have bins per class..?
-        N_CATEGORIES = config.data.categorical_channels
-
-        if os.path.exists(f"data/mnist_bins={N_CATEGORIES}.npz"):
-            BINS = np.load(f"data/mnist_bins={N_CATEGORIES}.npz")["arr_0"]
-        else:
-            x = data.data.ravel() / 255.0
-            _, BINS = np.histogram(x, bins=N_CATEGORIES - 1)
-            np.savez_compressed(f"data/mnist_bins={N_CATEGORIES}.npz", BINS)
-
-        def to_1hot(x):
-            x = torch.bucketize(x, torch.from_numpy(BINS))
-            x = F.one_hot(x, num_classes=N_CATEGORIES)
-            x = x.permute(3, 1, 2, 0).squeeze().float()
-            return x
-
-        if dataset_name == "mnist":
-            dataset = MNIST
-            data_transform = Compose(
-                (
-                    ToTensor(),
-                    Resize((img_sz, img_sz), interpolation=InterpolationMode.BILINEAR),
-                    Lambda(to_1hot),
-                    Lambda(onehot_to_logit),
-                )
-            )
-        elif dataset_name == "omniglot":
-            dataset = Omniglot
-            data_transform = Compose(
-                (
-                    ToTensor(),
-                    lambda x: 1 - x,
-                    Resize((img_sz, img_sz), interpolation=InterpolationMode.BILINEAR),
-                    Lambda(to_1hot),
-                    Lambda(onehot_to_logit),
-                )
-            )
-        else:
-            dataset = FashionMNIST
-            data_transform = Compose(
-                (
-                    ToTensor(),
-                    Resize((img_sz, img_sz), interpolation=InterpolationMode.BILINEAR),
-                    Lambda(to_1hot),
-                    Lambda(onehot_to_logit),
-                )
-            )
-        data = dataset(
-            rootdir, train=train_mode, download=True, transform=data_transform
-        )
-    else:
-        raise NotImplementedError
+  
 
     # Subset inlier only
     logging.info(f"Splitting dataset with seed: {config.seed}")
@@ -184,52 +76,102 @@ def get_dataset(config, train_mode=True, return_with_loader=True, return_logits=
         outlier_ds = Subset(data, outlier_idxs)
         # pdb.set_trace()
         train_ds, val_ds, test_ds = random_split(
-            inlier_ds, [0.8, 0.1, 0.1], generator=generator
+            inlier_ds, [0.7, 0.2, 0.1], generator=generator
         )
         test_ds = ConcatDataset([test_ds, outlier_ds])
     else:
         train_ds, val_ds = random_split(data, [0.9, 0.1], generator=generator)
         test_ds = val_ds  # WONT BE USED
-
+    #print(f'train_ds: {train_ds}')
+    #train_min = train_ds.min(axis=1)
+    #train_max = train_ds.max(axis=1)
+    #train_ds -= train_min
+    #val_ds -= train_min
+    #test_ds -= train_min
+    #train_ds /= train_max - train_min
+    #val_ds /= train_max - train_min
+    #test_ds /= train_max - train_min
     logging.info(f"Train, Val, Test: {len(train_ds)}, {len(val_ds)}, {len(test_ds)}")
+
+    # A helper to extract the subject IDs corresponding to a dataset subset.
+    def get_subset_subject_ids(subset, subject_ids):
+        if subject_ids is None:
+            return None
+        # If the subset is a Subset, use its .indices attribute to map back to the original order.
+        return [subject_ids[i] for i in subset.indices] if hasattr(subset, 'indices') else subject_ids
+
+    def get_concat_dataset_indices(concat_dataset):
+        all_indices = []
+        for ds in concat_dataset.datasets:
+            if hasattr(ds, 'indices'):
+                all_indices.extend(ds.indices)
+            else:
+                # If ds is not a Subset, use range as fallback.
+                all_indices.extend(list(range(len(ds))))
+        return np.array(all_indices)
+
+
+    train_subject_ids = get_subset_subject_ids(train_ds, subject_ids)
+    val_subject_ids = get_subset_subject_ids(val_ds, subject_ids)
+    test_indices = get_concat_dataset_indices(test_ds)
+    test_subject_ids = np.array(subject_ids)[test_indices]
+    
+    # You can check the first sample:
+    sample_features, sample_label = train_ds.dataset[0]
+    print("Sample features:", sample_features)
+    print("Sample label:", sample_label)
+
+    # And then check the corresponding subject id:
+    print("Subject ID for this sample:", train_subject_ids[:0])
+    #print('Val indices:', val_ds.indices)
+    # Print a sample mapping for verification.
+    print("Train Subject IDs (head):", train_subject_ids[:5])
+    print("Val Subject IDs (head):", val_subject_ids[:5])
+    print("Test Subject IDs (head):", test_subject_ids[:5])
 
     # if train_mode and dataset_name in tabular_datasets:
     #     inlier_idxs = [idx for idx, (x, y) in enumerate(train_ds) if y == 0]
     #     train_ds = Subset(train_ds, inlier_idxs)
-
+    print(config.training.batch_size)
+    print(config.eval.batch_size)
     if return_with_loader:
+    # Wrap DataLoader iterations with tqdm to show progress
+        print("Loading Train Data...")
         train_ds = DataLoader(
-            train_ds,
-            batch_size=config.training.batch_size,
-            num_workers=2,
-            pin_memory=True,
-            persistent_workers=True,
-            prefetch_factor=8,
-            shuffle=train_mode,
-        )
+        train_ds,
+        batch_size=config.training.batch_size,
+        num_workers=2,
+        pin_memory=True,
+        persistent_workers=True,
+        prefetch_factor=8,
+        shuffle=train_mode,
+    )
 
+        print("Loading Validation Data...")
         val_ds = DataLoader(
-            val_ds,
-            batch_size=config.eval.batch_size,
-            num_workers=2,
-            pin_memory=True,
-        )
+        val_ds,
+        batch_size=config.eval.batch_size,
+        num_workers=2,
+        pin_memory=True,
+    )
 
+        print("Loading Test Data...")
         test_ds = DataLoader(
-            test_ds,
-            batch_size=config.eval.batch_size,
-            num_workers=2,
-            pin_memory=True,
-        )
+        test_ds,
+        batch_size=config.eval.batch_size,
+        num_workers=2,
+        pin_memory=True,
+    )
 
-    return train_ds, val_ds, test_ds
+    return train_ds, val_ds, test_ds, train_subject_ids, val_subject_ids, test_subject_ids
+
 
 
 def load_dataset(name):
     str_type = lambda x: str(x, "utf-8")
 
-    if name in ["adult"]:
-        return pd.read_csv(f"data/{name}.csv").dropna()
+    # if name in ["adult"]:
+    #     return pd.read_csv(f"data/{name}.csv").dropna()
 
     # AD_nominal
     # dtype = all categorical
@@ -238,32 +180,59 @@ def load_dataset(name):
     # AID
     # dtype = all categorical
     # Anomaly: active
-    basedir = "data/categorical_data_outlier_detection/"
+    basedir = "/proj/NIRAL/studies/ABCD/PsychosisAtypicality/data/"
     dataconfig = get_config(name)
     label_name = dataconfig.label_column
 
-    if name == "census":
-        df = pd.read_pickle(basedir + tabular_datasets[name])
-    elif name in ["cars", "mushrooms", "nursery"]:
-        df = pd.read_csv(f"data/{tabular_datasets[name]}")
-        
-        if name == "cars":
-            labels = df[label_name]
-            drop_mask = np.logical_or(labels == "acc", labels == "good")
-            labels = labels[~drop_mask]
-            df = df[~drop_mask]
+    if name == "abcd":
+        df = pd.read_csv(f"{basedir}all_squeeky_id.csv", index_col=0)
+        # Extract subject IDs from the src_subject_id column
+        subject_ids = df['src_subject_id'].copy().values
+        na_count = df.isna().sum().sum()
+        print(f'na count {na_count}') 
+        df.dropna(axis=1, how='all', inplace=True)
+        print(df.head())
+        print(df.shape)
+        #print(df.tail())
+        #df = pd.read_csv(f"{basedir}merged_data.csv").dropna()
+        print(f'df: {df}')
+        columns_to_change = ['demo_sex_v2','race_ethnicity']
+#    columns_to_change = ['famhx_ss_fath_prob_vs_p', 'famhx_ss_moth_prob_vs_p', 'famhx_ss_fath_prob_nrv_p', 'famhx_ss_moth_prob_nrv_p','ksads_gad_raw_271_p', 'ksads_gad_raw_273_p', 
+    #                 'ksads_pd_raw_176_p', #'ksads_pd_raw_178_p','ksads_sad_raw_209_p', 'ksads_sad_raw_211_p', 'ksads_gad_raw_271_t', 'ksads_gad_raw_273_t', 'ksads_sad_raw_209_t', 'ksads_sad_raw_211_t', 'group_last_final' ]
 
-            # df[label_name][labels == "unacc"] = "0"
-            # df[label_name][labels == "vgood"] = "1"
-        
-        if name == "nursery":
-            labels = df[label_name]
-            drop_mask = np.logical_or(labels == "not_recom", labels == "very_recom")
-            labels = labels[drop_mask]
-            df = df[drop_mask]
+        df[columns_to_change] = df[columns_to_change].astype(str)
+        print(df.dtypes)
+        unique_sex = df['demo_sex_v2'].unique()
+        print('demo_sex_v2', unique_sex)
+        unique_race = df['race_ethnicity'].unique()
+        df = df.drop(columns=['src_subject_id'])
 
-            # df[label_name][labels == "not_recom"] = "0"
-            # df[label_name][labels == "very_recom"] = "1"
+        #df[columns_to_change] = df[columns_to_change].astype(str) + "years"
+        #df = df.drop(columns=columns_to_change)
+
+    # if name == "census":
+    #     df = pd.read_pickle(basedir + tabular_datasets[name])
+    # elif name in ["cars", "mushrooms", "nursery"]:
+    #     df = pd.read_csv(f"data/{tabular_datasets[name]}")
+        
+    #     if name == "cars":
+    #         labels = df[label_name]
+    #         drop_mask = np.logical_or(labels == "acc", labels == "good")
+    #         labels = labels[~drop_mask]
+    #         df = df[~drop_mask]
+
+    #         # df[label_name][labels == "unacc"] = "0"
+    #         # df[label_name][labels == "vgood"] = "1"
+        
+    #     if name == "nursery":
+    #         labels = df[label_name]
+    #         drop_mask = np.logical_or(labels == "not_recom", labels == "very_recom")
+    #         labels = labels[drop_mask]
+    #         df = df[drop_mask]        print('race_ethnicity:', unique_sex)
+
+
+    #         # df[label_name][labels == "not_recom"] = "0"
+    #         # df[label_name][labels == "very_recom"] = "1"
 
     else:
         data, metadata = arff.loadarff(basedir + tabular_datasets[name])
@@ -275,12 +244,12 @@ def load_dataset(name):
     y = np.zeros(len(df[label_name]), dtype=np.float32)
     ano_idxs = df[label_name] == dataconfig.anomaly_label
     y[ano_idxs] = 1.0
-    # print(y)
-    return X, y.squeeze(), dataconfig
+    print(y)
+    return X, y.squeeze(), subject_ids, dataconfig
 
 
 def build_tabular_ds(name, return_logits=True):
-    X, y, dataconfig = load_dataset(name)
+    X, y, subject_ids, dataconfig = load_dataset(name)
     to_logit = lambda x: np.log(np.clip(x, a_min=1e-5, a_max=1.0))
     # to_logit = lambda x: np.log(np.clip(x*1e5, a_min=1e-5, a_max=1e5))
 
@@ -289,16 +258,17 @@ def build_tabular_ds(name, return_logits=True):
     continuous_columns_selector = selector(dtype_include=[int, float])
     categorical_features = categorical_columns_selector(X)
     continuous_features = continuous_columns_selector(X)
+    
 
-    cat_processor = [OneHotEncoder(sparse=False)]
+    cat_processor = [OneHotEncoder(sparse_output=False)]
     if return_logits:
         cat_processor.append(FunctionTransformer(to_logit))
     preprocessor = ColumnTransformer(
         transformers=[
-            ("num", StandardScaler(), continuous_features),
+            ("num", MinMaxScaler(), continuous_features),
             (
-                "cat",
-                make_pipeline(*cat_processor),
+              "cat",
+              make_pipeline(*cat_processor),
                 categorical_features,
             ),
         ]
@@ -310,6 +280,8 @@ def build_tabular_ds(name, return_logits=True):
         preprocessor.fit(X)
     else:
         # Only fit on inliers
+        
+
         preprocessor.fit(X[y == 0])
 
     categories = [
@@ -318,6 +290,9 @@ def build_tabular_ds(name, return_logits=True):
         .named_steps["onehotencoder"]
         .categories_
     ]
+    print(dataconfig.categories)
+    print(categories)
+    print(len(continuous_features))
     assert categories == dataconfig.categories
     assert len(continuous_features) == dataconfig.numerical_features
     # pdb.set_trace()
@@ -327,7 +302,7 @@ def build_tabular_ds(name, return_logits=True):
     y = torch.from_numpy(y).float()
     logging.info(f"Loaded dataset: {name}, Shape: {X.shape}")
 
-    return TensorDataset(X, y)
+    return TensorDataset(X, y), subject_ids
 
 
 class CachedVOCSegmentation(torch.utils.data.Dataset):

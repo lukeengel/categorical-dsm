@@ -60,11 +60,12 @@ class Attention(nn.Module):
         h = self.heads
 
         x = self.norm(x)
-
+        torch.cuda.empty_cache()
         q, k, v = self.to_qkv(x).chunk(3, dim=-1)
         q, k, v = map(lambda t: rearrange(t, "b n (h d) -> b h n d", h=h), (q, k, v))
         q = q * self.scale
-
+    
+        torch.cuda.empty_cache()
         sim = einsum("b h i d, b h j d -> b h i j", q, k)
 
         attn = sim.softmax(dim=-1)
@@ -111,7 +112,7 @@ class Transformer(nn.Module):
 
         if not return_attn:
             return x
-
+        torch.cuda.empty_cache()
         return x, torch.stack(post_softmax_attns)
 
 
@@ -125,8 +126,25 @@ class NumericalEmbedder(nn.Module):
         self.biases = nn.Parameter(torch.randn(num_numerical_types, dim))
 
     def forward(self, x):
-        x = rearrange(x, "b n -> b n 1")
+        #print(f"x shape: {x.shape}, x type: {type(x)}")
+
+
+
+        if x.dim() == 2:  # Only rearrange if it's 2D
+            x = rearrange(x, "b n -> b n 1")
+        #elif x.dim() == 3:  # Handle the 3D case properly
+            #x = rearrange(x, "b n d -> b (n d)")
+        #print("Shape of x:", x.shape)
+        #print("Shape of weights:", self.weights.shape)
+        #print("Shape of biases:", self.biases.shape)
+
+        #print(f"x shape: {x.shape}, x type: {type(x)}")
+
+
+
+        
         return x * self.weights + self.biases
+        
 
 
 def to_logits(dim, dim_out):
@@ -217,10 +235,7 @@ class FTTransformer(nn.Module):
         x_numer, x_categ = torch.split(
             x, [self.num_continuous, self.num_unique_categories], dim=1
         )
-
-        # add numerically embedded tokens
-        if self.num_continuous > 0:
-            x_numer = self.numerical_embedder["proj_in"](x_numer)
+      
 
         # categorical embedded tokens
         x_cats = torch.split(x_categ, self.categories, dim=1)
@@ -270,7 +285,7 @@ class FTTransformer(nn.Module):
                 dim=1,
             )
             x_out = torch.cat((x_numer, x_out), dim=1)
-
+        
         if not return_attn:
             return x_out
 
