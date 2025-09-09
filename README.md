@@ -1,6 +1,6 @@
 # Denoising Score Matching for Categorical Data
 
-This is the official repo for the work [Anomaly Detection via Gumbel Noise Score Matching](https://www.frontiersin.org/articles/10.3389/frai.2024.1441205). If you use this repository for research purposes, please cite our work using the citation at the end of this document.
+This is a forked and modified repo from the work [Anomaly Detection via Gumbel Noise Score Matching](https://www.frontiersin.org/articles/10.3389/frai.2024.1441205). If you use this repository for research purposes, please cite their work using the citation at the end of this document.
 
 ## Training on a new dataset
 
